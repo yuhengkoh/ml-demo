@@ -2,7 +2,7 @@
 
 #PBS -N test
 #PBS -q gpu
-#PBS -l ncpus=3:ngpus=12:mem=24GB
+#PBS -l select=1:ncpus=3:ngpus=12:mem=24GB
 #PBS -o test.log
 #PBS -e error.log
 
