@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 #import all encoding
 df_lst = []
-for path in glob.glob("all_encodings/*.csv"):
+for path in glob.glob("all_encodings2/*.csv"):
     print(f"Loading data from {path}")
     if path.split("\\")[-1][:6] != "(pace)":
         tdf = pd.read_csv(path) #temp df
@@ -41,15 +41,15 @@ print(val)
 print(test)
 
 
-train_out_file = "znorm_train_esm2_embeddings.csv"
+train_out_file = "znorm11_train_esm2_embeddings_rmcov.csv"
 train.to_csv(train_out_file, index=False)
 print(f"Saved train embeddings to: {train_out_file}")
 
 
-val_out_file = "znorm_val_esm2_embeddings.csv"
+val_out_file = "znorm11_val_esm2_embeddings_rmcov.csv"
 val.to_csv(val_out_file, index=False)
 print(f"Saved val embeddings to: {val_out_file}")
 
-test_out_file = "znorm_test_esm2_embeddings.csv"
+test_out_file = "znorm11_test_esm2_embeddings_rmcov.csv"
 test.to_csv(test_out_file, index=False)
 print(f"Saved test mbeddings to: {test_out_file}")

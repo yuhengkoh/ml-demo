@@ -1,0 +1,20 @@
+Using device: cuda
+Using device: cuda
+Using device: cuda
+Using device: cuda
+Using device: cuda
+Using device: cuda
+Using device: cuda
+Using device: cuda
+Epoch 1, Loss: 3582.1687
+Using device: cuda
+Using device: cuda
+Using device: cuda
+Using device: cuda
+Using device: cuda
+Using device: cuda
+Epoch 1, Loss: 3581.6387
+Using device: cuda
+Using device: cuda
+Using device: cuda
+Epoch 1, Loss: 3583.2819

@@ -1,7 +1,7 @@
 # ++++ train function ++++
 def train_model(X, y, learn_rate=1e-4, epoch0=10, loss_fn=None, batch_size0=16, hidden_dim0=200):
     #module imports
-    from fp_model import fp2_model  # Import the upgraded model
+    from fp_model import fp2_model, model_multilayer  # Import the upgraded model
     from torch.utils.data import TensorDataset, DataLoader
     import torch
     import torch.nn as nn
@@ -19,7 +19,7 @@ def train_model(X, y, learn_rate=1e-4, epoch0=10, loss_fn=None, batch_size0=16, 
     #dataloader = dataloader.to(device)
 
     # Initialize model, loss function, and optimizer
-    model = fp2_model(hidden_dim=hidden_dim0)  # Use the upgraded model
+    model = model_multilayer(hidden_dim=hidden_dim0)  # Use the upgraded model
     optimizer = torch.optim.Adam(model.parameters(), lr=learn_rate)
     model = model.to(device)  # Move model to the specified device (CPU or GPU)
     if loss_fn is None:
@@ -44,12 +44,12 @@ def train_model(X, y, learn_rate=1e-4, epoch0=10, loss_fn=None, batch_size0=16, 
             log_file.write(f"Epoch {epoch+1}, Loss: {total_loss:.4f}\n")
 
     # Save the trained model
-    output_path = f'v2-{hidden_dim0}-{learn_rate}-{epoch0}.pth'
+    output_path = f'v3-{hidden_dim0}-{learn_rate}-{epoch0}.pth'
     torch.save(model.state_dict(), output_path)
 
     # note: for use of a log writer on the HPC
     with open('log.txt', 'a') as log_file:
-            log_file.write(f"output path: {output_path}\n")
+        log_file.write(f"output path: {output_path}\n")
     #model.to('cpu')  # Move model back to CPU before returning
     #return model
     return None # for hpc use, in case smth breaks when transferring model to cpu; comment out if you want to use the model later
@@ -77,9 +77,9 @@ y_preT = torch.tensor(df["z_norm"].values).float()  # Fitness scores (real value
 y = torch.reshape(y_preT, (-1, 1))  # Reshape to a 2D tensor with one column
 
 # hidden dims to test
-hidden_dim_list = [30,60,100,120,150,200,250]
-epochlist = [100,120,150,180,230,280]
-lrlist = [1e-4, 1e-3, 1e-5, 1e-6]
+hidden_dim_list = [[30],[90,30],[60,30],[90,60,30],[30,30,30],[90,60,30,30]]
+epochlist = [30,130,200,280]
+lrlist = [1e-4]
 for i in hidden_dim_list:
     for j in epochlist:
         for k in lrlist:
