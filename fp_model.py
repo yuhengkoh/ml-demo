@@ -147,6 +147,7 @@ class model_multilayer(nn.Module):
     def forward(self, x):
         return self.model(x)
     
+    
 #(v3d) --- modified v3 model with dropout added back ---
 class model_v3d(nn.Module): 
     def __init__(self, hidden_dim=200, dropout_rate=0.2, input_dim=320): #hidden dim can be either an int or array

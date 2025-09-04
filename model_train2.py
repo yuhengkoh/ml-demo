@@ -1,16 +1,33 @@
+'''
+Note: this script is used to train the MLP model used for fitness prediction.
+
+Contents: 
+(standalone): trains an mlp using data in training_data folder with virtually all parameters that can be specified by user. edit relevant section of code if needed
+train_model: function used to train an mlp with specified hyperparameters, also can be used for retraining for active/transfer learning (but please remember to freeze layers.)
+'''
+#module imports
+from fp_model import fp2_model, model_multilayer, model_v3d  # Import the upgraded model
+from torch.utils.data import TensorDataset, DataLoader
+import torch
+import torch.nn as nn
+import pandas as pd
+import glob
+import torch
+
 # ++++ train function ++++
-def train_model(X, y, learn_rate=1e-4, epoch0=10, loss_fn=None, batch_size0=16, hidden_dim0=200):
-    #module imports
-    from fp_model import fp2_model, model_multilayer  # Import the upgraded model
-    from torch.utils.data import TensorDataset, DataLoader
-    import torch
-    import torch.nn as nn
+def train_model(df, y_label="z_norm",learn_rate=1e-4, epoch0=10, loss_fn=None, batch_size0=16, hidden_dim0=200,model_type="v3",to_save=True,log=False,pre_trained_model=None):
+    #dataframe manipulation
+    xdf = df[[*df][:320]]  # Drop the target column
+    X = torch.tensor(xdf.values).float() # ESM2 embeddings
+    y_preT = torch.tensor(df[y_label].values).float()  # Fitness scores (real values)
+    y = torch.reshape(y_preT, (-1, 1))  # Reshape to a 2D tensor with one column
 
     # Set device
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     # note: for use of a log writer on the HPC
-    with open('log.txt', 'a') as log_file:
-        log_file.write(f"Using device: {device}\n")
+    if log:
+        with open('log.txt', 'a') as log_file:
+            log_file.write(f"Using device: {device}\n")
 
     # Create dataset and dataloader
     dataset = TensorDataset(X, y)
@@ -19,12 +36,19 @@ def train_model(X, y, learn_rate=1e-4, epoch0=10, loss_fn=None, batch_size0=16, 
     #dataloader = dataloader.to(device)
 
     # Initialize model, loss function, and optimizer
-    model = model_multilayer(hidden_dim=hidden_dim0)  # Use the upgraded model
+    if model_type == "v3":
+        model = model_multilayer(hidden_dim=hidden_dim0)  # Use the upgraded model
+    elif model_type == "v3d":
+        model = model_v3d(hidden_dim=hidden_dim0)
+    else:
+        raise Exception("Function cannot handle selected model type")
+    if pre_trained_model is not None: #in case function is used for transfer/ active learning retraining
+        model = pre_trained_model
     optimizer = torch.optim.Adam(model.parameters(), lr=learn_rate)
     model = model.to(device)  # Move model to the specified device (CPU or GPU)
     if loss_fn is None:
         loss_fn = nn.MSELoss()  # Default to MSELoss if not provided
-
+    
     # Training loop
     for epoch in range(epoch0):
         total_loss = 0
@@ -40,27 +64,27 @@ def train_model(X, y, learn_rate=1e-4, epoch0=10, loss_fn=None, batch_size0=16, 
             total_loss += loss.item()
 
         print(f"Epoch {epoch+1}, Loss: {total_loss:.4f}")
-        with open('log.txt', 'a') as log_file:
-            log_file.write(f"Epoch {epoch+1}, Loss: {total_loss:.4f}\n")
+        if log:
+            with open('log.txt', 'a') as log_file:
+                log_file.write(f"Epoch {epoch+1}, Loss: {total_loss:.4f}\n")
 
     # Save the trained model
-    output_path = f'v3-{hidden_dim0}-{learn_rate}-{epoch0}.pth'
-    torch.save(model.state_dict(), output_path)
+    if to_save:
+        output_path = f'v3-{hidden_dim0}-{learn_rate}-{epoch0}.pth'
+        torch.save(model.state_dict(), output_path)
 
-    # note: for use of a log writer on the HPC
-    with open('log.txt', 'a') as log_file:
-        log_file.write(f"output path: {output_path}\n")
-    #model.to('cpu')  # Move model back to CPU before returning
-    #return model
-    return None # for hpc use, in case smth breaks when transferring model to cpu; comment out if you want to use the model later
+        # note: for use of a log writer on the HPC
+        with open('log.txt', 'a') as log_file:
+            log_file.write(f"output path: {output_path}\n")
+        return None #probably not needed but doesn't hurt to include it
+    else:
+        #model.to('cpu')  # Move model back to CPU before returning
+        return model
+    
 
 '''
 Main exercution
 '''
-import pandas as pd
-import glob
-import torch
-
 # load training data
 # The CSV file should contain ESM2 embeddings and a target column 'fitness_scaled'
 df_lst = []
@@ -71,20 +95,16 @@ for path in glob.glob("training_data/*.csv"):
 
 #df = pd.read_csv('cov2_S_labels_esm2_embeddings.csv')
 df = pd.concat(df_lst, ignore_index=True)
-xdf = df[[*df][:320]]  # Drop the target column
-X = torch.tensor(xdf.values).float() # ESM2 embeddings
-y_preT = torch.tensor(df["z_norm"].values).float()  # Fitness scores (real values)
-y = torch.reshape(y_preT, (-1, 1))  # Reshape to a 2D tensor with one column
 
 # hidden dims to test
 hidden_dim_list = [[30],[90,30],[60,30],[90,60,30],[30,30,30],[90,60,30,30]]
-epochlist = [30,130,200,280]
+epochlist = [25,50,75,100,125,150,175,200]
 lrlist = [1e-4]
 for i in hidden_dim_list:
     for j in epochlist:
         for k in lrlist:
             print(f"Training model with hidden dimension: {i}, epochs: {j}, learning rate: {k}")
-            model = train_model(X, y, learn_rate=k, epoch0=j, hidden_dim0=i)
+            model = train_model(df, learn_rate=k, epoch0=j, hidden_dim0=i)
             
             print(f"Model with hidden dimension {i}, epochs {j}, and learning rate {k} trained and saved.")
     '''

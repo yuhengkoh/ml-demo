@@ -86,4 +86,4 @@ def eval(save_folder_path="model_dsm11rmcov/*.pth",benchmark_path="cov2_S_labels
         print("Predictions:", preds)
     '''
 
-eval(benchmark_path = 'cov2_S_labels_esm2_embeddings.csv')
+eval(benchmark_path = 'znorm11_val_esm2_embeddings_rmcov.csv')
