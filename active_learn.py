@@ -3,98 +3,70 @@ optimised code for active learning
 distinct train/ active learning (loop) functions such that they can be called upon individually by other scripts if needed
 
 Contents: 
-rf_loop: wrapper for loop function hat handles active learning for Random Forest Regressors. Parameters used are adapted from EvolvePro paper to hopefully
-emulate EvolvePro
-pre_train_rf: for pretraining of initial Random Forest Regressor with large training dataset
-loop: "loop" mechenism of active learning, evaluates model performance, recommends encodings for active learning, refits model
 excel_import: function thats imports data from an excel file and generates X (encodings) and y (fitness) dataframes/tensors for training
 folder_import: imports data in a folder and combines it into a single df [side note, this is kinda redundant]
+rf_loop: wrapper for loop function that handles active learning for Random Forest Regressors. Parameters used are adapted from EvolvePro paper to hopefully
+emulate EvolvePro
+torch_loop: wrapper for loop function that handles active transfer learning for MLPs. 
+pre_train_rf: for pretraining of initial Random Forest Regressor with large training dataset
+loop: "loop" mechenism of active learning, evaluates model performance, recommends encodings for active learning, refits model. Has support for both torch and 
 '''
+import sklearn
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import Lasso
 from sklearn.metrics import mean_squared_error, r2_score
+from scipy.stats import spearmanr
 import pandas as pd
 import numpy as np
 import torch
 import pickle
-from model_train2 import train_model
-from fp_model import model_v3d, model_multilayer
+from fp_model import model_v3d, model_multilayer, train_model, load_model
 
 #############################################
 #            Bunch of functions             #
 #############################################
-
-def rf_loop(target_pth,pre_train=False): #pre_train assumes pickle save for rf regressor is present in main directory
-    if pre_train == False:
-        xdf_train,ydf_train = excel_import(mode='default',output='df_znorm') #imports training data
-        model_rf = RandomForestRegressor(
-                n_estimators=100,
-                criterion="friedman_mse",
-                max_depth=None,
-                min_samples_split=2,
-                min_samples_leaf=1,
-                min_weight_fraction_leaf=0.0,
-                max_features=1.0,
-                max_leaf_nodes=None,
-                min_impurity_decrease=0.0,
-                bootstrap=True,
-                oob_score=False,
-                n_jobs=None,
-                random_state=1,
-                verbose=0,
-                warm_start=False,
-                ccp_alpha=0.0,
-                max_samples=None,
-            ) #regressor used is the same as EvolvePro, used for benchmarking/ comparison
-        model_rf.fit(xdf_train,ydf_train)
-    else: 
-        with open("rf_regressor_dsm11_rm_cov.cpickle", "rb") as f:
-            model_rf = pickle.load(f)
-    xdf_target, ydf_target = excel_import(target_pth,output='df_fitness')
-    spearman_lst, mse_lst = loop(model_rf,xdf_target,ydf_target)
-    print (spearman_lst)
-    print(mse_lst)
-
-def pre_train_rf(): #used to pretrain RF model
-    xdf_train,ydf_train = excel_import(mode='default',output='df_znorm') #imports training data
-    model_rf = RandomForestRegressor(
-            n_estimators=100,
-            criterion="friedman_mse",
-            max_depth=None,
-            min_samples_split=2,
-            min_samples_leaf=1,
-            min_weight_fraction_leaf=0.0,
-            max_features=1.0,
-            max_leaf_nodes=None,
-            min_impurity_decrease=0.0,
-            bootstrap=True,
-            oob_score=False,
-            n_jobs=None,
-            random_state=1,
-            verbose=0,
-            warm_start=False,
-            ccp_alpha=0.0,
-            max_samples=None,
-        ) #regressor used is the same as EvolvePro, used for benchmarking/ comparison
-    model_rf.fit(xdf_train,ydf_train)
-    with open('rf_regressor_dsm11_rm_cov.cpickle', 'wb') as f:
-        pickle.dump(model_rf, f)
-
+'''
+IO Functiions
+'''
 #function that converts compatible excel files into data frame for training/testing
-#includes converting raw fitness into z scores
-def excel_import(pth=None,raw_fitness_title="fitness_scaled", mode='single', output='train'): 
-    if mode == 'single':
-        df = pd.read_csv(pth)
-    elif mode == 'group':
-        df = folder_import(pth)
-    else: #default, where folder training_data is used to store encodings
-        df = folder_import()
-    xdf = df[[*df][:320]]  # Drop the target column
+#assumes normalised fitness scores z_norm exist, otherwise will result in an error
+def excel_import(pth=None,raw_fitness_title="fitness_scaled", output='df'): 
+    '''
+    try:
+        if mode == 'single':
+            df = pd.read_csv(pth)
+            xdf = df[[*df][:320]]  # Drop the target column
+        elif mode == 'group':
+            df = folder_import(pth)
+            xdf = df[[*df][1:321]]  # fixes error due to frameshift during folder_import
+        else: #default, where folder training_data is used to store encodings
+            df = folder_import()
+            xdf = df[[*df][1:321]]  # fixes error due to frameshift during folder_import
+            #xdf = df[[*df][:320]]  # Drop the target column
+    except Exception as e:
+        raise Exception("File import path invalid")
+        exit()
+    '''
+    try:
+        if pth == None: #default, where folder training_data is used to store encodings
+            df = folder_import()
+            xdf = df[[*df][1:321]]  # fixes error due to frameshift during folder_import
+            #xdf = df[[*df][:320]]  # Drop the target column
+        elif pth.endswith(".csv"): #for csv files
+            df = pd.read_csv(pth)
+            xdf = df[[*df][:320]]  # Drop the target column
+        else: #for folder imports
+            df = folder_import(pth)
+            xdf = df[[*df][1:321]]  # fixes error due to frameshift during folder_import
+    except Exception as e:
+        raise Exception("File import path invalid")
+        exit()
+    print(xdf)
     X = torch.tensor(xdf.values).float() # ESM2 embeddings
-    if "z_norm" not in df.columns and mode == 'single':
+    if "z_norm" not in df.columns and pth.endswith(".csv"):
         df["z_norm"] = (df[raw_fitness_title] - df[raw_fitness_title].mean()) / df[raw_fitness_title].std() 
         #standardization of scaled fitness can be mathematically proven to be equivalent to standarization of raw values
-    else:
-        raise ImportError
+    
     y_preT = torch.tensor(df["z_norm"].values).float()  # Fitness scores (real values)
     y = torch.reshape(y_preT, (-1, 1))  # Reshape to a 2D tensor with one column
     #print(df)
@@ -108,55 +80,175 @@ def excel_import(pth=None,raw_fitness_title="fitness_scaled", mode='single', out
         return xdf, df
     elif output == 'tensor':
         return X, y
+    else:
+        return df
 
-def folder_import(folder_pth="training_data/*.csv"):
+def folder_import(folder_pth="training_data"):
     import glob
     # load training data
     # The CSV file should contain ESM2 embeddings and a target column 'fitness_scaled'
     df_lst = []
-    for path in glob.glob(folder_pth):
+    for path in glob.glob(folder_pth+"/*.csv"):
         print(f"Loading data from {path}")
         tdf = pd.read_csv(path) #temp df
         df_lst.append(tdf)
     df = pd.concat(df_lst, ignore_index=True)
+    #print(df)
     return df
+
+def rf_loop(target_pth,model_pth=None): #pre_train assumes pickle save for rf regressor is present in main directory
+    if model_pth == None:
+        xdf_train,ydf_train = excel_import(output='df_znorm') #imports training data
+        model_rf = RandomForestRegressor(
+                n_estimators=100,
+                criterion="friedman_mse",
+                max_depth=None,
+                min_samples_split=2,
+                min_samples_leaf=1,
+                min_weight_fraction_leaf=0.0,
+                max_features=1.0,
+                max_leaf_nodes=None,
+                min_impurity_decrease=0.0,
+                bootstrap=True,
+                oob_score=False,
+                n_jobs=-1,
+                random_state=1,
+                verbose=0,
+                warm_start=False,
+                ccp_alpha=0.0,
+                max_samples=None,
+            ) #regressor used is the same as EvolvePro, used for benchmarking/ comparison
+        model_rf.fit(xdf_train,ydf_train)
+    else: 
+        with open(model_pth, "rb") as f:
+            model_rf = pickle.load(f)
+            sklearn.set_config(transform_output="pandas")
+    df_target = excel_import(target_pth)
+    print(model_rf.feature_names_in_)
+    spearman_lst, mse_lst = loop(model_rf,df_target)
+    print(spearman_lst)
+    print(mse_lst)
+    return(spearman_lst,mse_lst)
+
+
+def torch_loop(target_pth, model_pth='model_dsm11rmcov/v3d-[30, 30, 30]-0.0001-130.pth',label_tl="l4"): #torch loop requires a pre-trained v3 or v3d model, as it uses transfer learning
+    model = load_model(model_pth)
+    df_target = excel_import(target_pth)
+    spearman_lst, mse_lst = loop(model,df=df_target,top_layer_label=label_tl)
+    print(spearman_lst)
+    print(mse_lst)
+
+
+def pre_train_rf(train_data_pth=None, model_path='rf_regressor_dsm11_rm_cov.cpickle'): #used to pretrain RF model
+    if train_data_pth == None:
+        xdf_train,ydf_train = excel_import(output='df_znorm') #imports training data
+    else:
+        xdf_train,ydf_train = excel_import(pth=train_data_pth,output='df_znorm')
+    model_rf = RandomForestRegressor(
+            n_estimators=100,
+            criterion="friedman_mse",
+            max_depth=None,
+            min_samples_split=2,
+            min_samples_leaf=1,
+            min_weight_fraction_leaf=0.0,
+            max_features=1.0,
+            max_leaf_nodes=None,
+            min_impurity_decrease=0.0,
+            bootstrap=True,
+            oob_score=False,
+            n_jobs=-1,
+            random_state=1,
+            verbose=0,
+            warm_start=False,
+            ccp_alpha=0.0,
+            max_samples=None,
+        ) #regressor used is the same as EvolvePro, used for benchmarking/ comparison
+    print(ydf_train)
+    model_rf.fit(xdf_train,ydf_train)
+    with open(model_path, 'wb') as f:
+        pickle.dump(model_rf, f)
 
 #function that predicts, then retrains model per cycle
 # Note: due to lack of experimental data, complete DMS data not included in training data is used to simulate actual DE/PACE experiments
-def loop(model,xdf=None,ydf=None,df=None,cycles=4,top_layer_label=None): 
+def loop(model,df_target,cycles=4,top_layer_label=None): 
     #model: model of interest; cycles: number of learning loops
     #(for handling Scikit models) xdf: Encoding Dataframe; ydf: true fitness
     #(for handling torch models) df: Dataframe with both encodings and fitness; top_layer_label: used to specify layer to be frozen 
 
-    #identifies if model is sklearn or torch
-    #since they differ in the way which they are handled
-
     spearman_per_cycle = []
     mse_per_cycle = []
-    for i in range(cycles): #main cycle
-        if "sklearn" in str(type(model)): #checks if model is sklearn (but in our case only RF regressor used from sklearn)
-            y_pred = model.predict(xdf)
-            mse_per_cycle.append(mean_squared_error(ydf, y_pred))
-            spearman_per_cycle.append()
-            print(mse_per_cycle, spearman_per_cycle)
-        elif "torch" in str(type(model)): #checks if model is torch
-            #assumes all torch model inputs are of v3/v3d type
-    
-            #freezes all layer
-            for param in model.parameters():
-                param.requires_grad = False
-            
-            #unfreeze layer to be changed (default is final layer before output)
-            for param in model.layer_dict[top_layer_label].parameters():
-                param.requires_grad = True
-            
+    train_df = pd.DataFrame()
+    #identifies if model is sklearn or torch
+    #since they differ in the way which they are handled
+    if "sklearn" in str(type(model)): #checks if model is sklearn (but in our case only RF regressor used from sklearn)
+        #initialization of parameters needed
+        model_rf = model
+        xdf = df_target.loc[:, [str(i) for i in range(0, 320)]]
+        y_true = df_target["z_norm"]
+        x_train = pd.DataFrame() 
+        for i in range(cycles): #main cycle
             #prediction
+            y_pred = model_rf.predict(xdf)
+            #test statistics
+            mse_per_cycle.append(mean_squared_error(y_true, y_pred))
+            spearman_per_cycle.append(float(spearmanr(y_true,y_pred).statistic))
+            print(spearman_per_cycle)
+            #active learning
+            #variant selection
+            train_df = select_variant(df_target,x_train,y_pred,train_df)
+            #assign new training dataset
+            x_train = train_df.loc[:, [str(i) for i in range(0, 320)]]
+            y_train_true = train_df["z_norm"]
+            model_rf = RandomForestRegressor(
+                    n_estimators=100,
+                    criterion="friedman_mse",
+                    max_depth=None,
+                    min_samples_split=2,
+                    min_samples_leaf=1,
+                    min_weight_fraction_leaf=0.0,
+                    max_features=1.0,
+                    max_leaf_nodes=None,
+                    min_impurity_decrease=0.0,
+                    bootstrap=True,
+                    oob_score=False,
+                    n_jobs=-1,
+                    random_state=1,
+                    verbose=0,
+                    warm_start=False,
+                    ccp_alpha=0.0,
+                    max_samples=None,
+                ) #reinitialize rf
+            model_rf.fit(x_train,y_train_true)
+    elif "torch" in str(type(model)): #checks if model is torch; assumes all torch model inputs are of v3/v3d+ type
+        df = xdf #initialized df; only 1 df for torch models needed/ used as input (essentially renames xdf to df to avoid confusion)
+
+        #freezes all layer
+        for param in model.parameters():
+            param.requires_grad = False
+        
+        #unfreeze layer to be changed (default is final layer before output)
+        for param in model.layer_dict[top_layer_label].parameters():
+            param.requires_grad = True
+        
+        #loop
+        for j in range(cycles):
+            train_model(df,pre_trained_model=model,to_save=False)
+        #prediction
 
     return spearman_per_cycle, mse_per_cycle
+
+def select_variant(df_target,x_train,y_pred,old_df,count=16, fitness_label='z_norm', mode='topn'):
+    df_target['y_pred'] = y_pred 
+    if mode=='topn':
+        print(df_target[fitness_label].dtype)
+        new_variant = df_target.nlargest(count,'y_pred')
+        df_out = pd.concat([old_df,new_variant],ignore_index=True)
+        #new_df = df_target.sample(n=count)  
+    return df_out
 
 #############################################
 #           Main Exercution                 #
 #############################################
-            
-#rf_loop('cov2_S_labels_esm2_embeddings.csv')
-pre_train_rf()
+rf_loop('cov2_S_labels_esm2_embeddings.csv',model_pth="rf_regressor_dsm11_rm_cov.cpickle")
+#pre_train_rf()
+#print("done!")

@@ -3,10 +3,11 @@ Note: this script is used to train the MLP model used for fitness prediction.
 
 Contents: 
 (standalone): trains an mlp using data in training_data folder with virtually all parameters that can be specified by user. edit relevant section of code if needed
+[train_model functionality has been moved to fp_model]
 train_model: function used to train an mlp with specified hyperparameters, also can be used for retraining for active/transfer learning (but please remember to freeze layers.)
 '''
 #module imports
-from fp_model import fp2_model, model_multilayer, model_v3d  # Import the upgraded model
+from fp_model import fp2_model, model_multilayer, model_v3d, train_model  # Import the upgraded model
 from torch.utils.data import TensorDataset, DataLoader
 import torch
 import torch.nn as nn
@@ -14,6 +15,7 @@ import pandas as pd
 import glob
 import torch
 
+'''
 # ++++ train function ++++
 def train_model(df, y_label="z_norm",learn_rate=1e-4, epoch0=10, loss_fn=None, batch_size0=16, hidden_dim0=200,model_type="v3",to_save=True,log=False,pre_trained_model=None):
     #dataframe manipulation
@@ -80,7 +82,7 @@ def train_model(df, y_label="z_norm",learn_rate=1e-4, epoch0=10, loss_fn=None, b
     else:
         #model.to('cpu')  # Move model back to CPU before returning
         return model
-    
+'''  
 
 '''
 Main exercution

@@ -2,7 +2,19 @@
 script to benchmark fitness prediction model
 model performance is evaluated based on ranking performance 
 (via either kendall tau or spearman correlation)
+
+Contents:
+eval_lite: function that uses torch/scikit model to predict fitness of encodings in inputted dataframe. Returns new dataframe with respective predicted fitness.
+as well as relevant test statistics 
+eval: batch evaluates models in a folder
 '''
+def eval_lite(model, xdf):
+        if "sklearn" in str(type(model)): #checks if model is sklearn (but in our case only RF regressor used from sklearn)
+            y_pred = model.predict(xdf)
+            
+        elif "torch" in str(type(model)): #checks if model is torch
+            None
+
 def eval(save_folder_path="model_dsm11rmcov/*.pth",benchmark_path="cov2_S_labels_esm2_embeddings.csv"):
     import torch
     import pandas as pd

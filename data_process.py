@@ -59,12 +59,14 @@ def train_test_split(data_folder, train_pct=0.8):
     print(f"Saved test embeddings to: {test_out_file}")
 
 #function standardized fitness scores (via derivation from rescaled fitness_scaled)
+#standardization of scaled fitness can be mathematically proven to be equivalent to standarization of raw values
 def standard_norm(data_folder):
     for path in glob.glob(data_folder+"/*.csv"):
         print(f"Loading data from {path}")
         tdf = pd.read_csv(path) #temp df
         output_str = path.split("\\")[1].split("_")[0] + "_normalised_esm2_encodings.csv"  # Extract filename without extension
         tdf["z_norm"] = (tdf["fitness_scaled"] - tdf["fitness_scaled"].mean()) / tdf["fitness_scaled"].std()
+        #df["z_norm"] = (df[raw_fitness_title] - df[raw_fitness_title].mean()) / df[raw_fitness_title].std()
         tdf.to_csv(data_folder+"/"+output_str)
     print("done!")
 
