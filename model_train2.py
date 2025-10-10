@@ -7,7 +7,7 @@ Contents:
 train_model: function used to train an mlp with specified hyperparameters, also can be used for retraining for active/transfer learning (but please remember to freeze layers.)
 '''
 #module imports
-from fp_model import fp2_model, model_multilayer, model_v3d, train_model  # Import the upgraded model
+from fp_model import fp2_model, model_multilayer, model_v3d, train_model, eval_model  # Import the upgraded model
 from torch.utils.data import TensorDataset, DataLoader
 import torch
 import torch.nn as nn
@@ -98,17 +98,38 @@ for path in glob.glob("training_data/*.csv"):
 #df = pd.read_csv('cov2_S_labels_esm2_embeddings.csv')
 df = pd.concat(df_lst, ignore_index=True)
 
+#import testing_df for per round evaluation; trains to sweet spot in epoch
+#comment out if not used
+#test_df = pd.read_csv("test_esm2_embeddings.csv")
+
 # hidden dims to test
-hidden_dim_list = [[30],[90,30],[60,30],[90,60,30],[30,30,30],[90,60,30,30]]
-epochlist = [25,50,75,100,125,150,175,200]
+#hidden_dim_list = [[30],[90,30],[60,30],[90,60,30],[30,30,30],[90,60,30,30]]
+hidden_dim_list = [[30]]
+#epochlist = [25,50,75,100,125,150,175,200]
 lrlist = [1e-4]
 for i in hidden_dim_list:
-    for j in epochlist:
-        for k in lrlist:
+    for k in lrlist:
+        #for logging purposes
+        #lines 117,118,128,129,130,131 commented away to disable per-round validation due to errors, do manually
+        with open('log.txt', 'a') as log_file:
+            log_file.write(f"Training model with hidden dimension: {i}, learning rate: {k}:")
+        print(f"Training model with hidden dimension: {i}, learning rate: {k}")
+        model = train_model(df,y_label="fitness_scaled", learn_rate=k, epoch0=10, hidden_dim0=i)
+        #test_df["y_pred_10"] = eval_model(model,test_df,output="np")
+        #score_list = [test_df["y_pred_10"].corr(test_df["fitness_scaled"],method='spearman')]
+        for j in range(20,301,10):
             print(f"Training model with hidden dimension: {i}, epochs: {j}, learning rate: {k}")
-            model = train_model(df, learn_rate=k, epoch0=j, hidden_dim0=i)
-            
-            print(f"Model with hidden dimension {i}, epochs {j}, and learning rate {k} trained and saved.")
+            #retrains model for 10 loops per loop in for loop
+            model = train_model(df,y_label="fitness_scaled", learn_rate=k, epoch0=10, hidden_dim0=i,to_save=False, pre_trained_model=model)
+            output_path = f'v3d-{i}-{k}-{j}.pth'
+            torch.save(model.state_dict(), output_path)
+            # note: for use of a log writer on the HPC
+            with open('log.txt', 'a') as log_file:
+                log_file.write(f"output path: {output_path}\n")
+            #test_df["y_pred_"+str(j)] = eval_model(model,test_df,output="np") #makes predictions, numpy output
+            #score_list.append(test_df["y_pred_"+str(j)].corr(test_df["fitness_scaled"],method='spearman')) #scoring per epoch
+        #with open('log.txt', 'a') as log_file: #to record spearman's per epoch
+            #log_file.write(f"Spearman's per 10 rounds: {score_list}\n")
     '''
     print(f"Training model with hidden dimension: {i}")
     model = train_model(X, y, learn_rate=1e-4, epoch0=180, hidden_dim0=i, batch_size0=10)

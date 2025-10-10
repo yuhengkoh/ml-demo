@@ -1,0 +1,37 @@
+data
+pr
+Model loaded from proteingym_models\v3d-[30]-0.0001-10.pth, model 0
+pr
+Model loaded from proteingym_models\v3d-[30]-0.0001-20.pth, model 1
+pr
+Model loaded from proteingym_models\v3d-[30]-0.0001-30.pth, model 2
+pr
+Model loaded from proteingym_models\v3d-[30]-0.0001-40.pth, model 3
+pr
+Model loaded from proteingym_models\v3d-[30]-0.0001-50.pth, model 4
+pr
+Model loaded from proteingym_models\v3d-[30]-0.0001-60.pth, model 5
+pr
+Model loaded from proteingym_models\v3d-[30]-0.0001-70.pth, model 6
+pr
+Model loaded from proteingym_models\v3d-[30]-0.0001-80.pth, model 7
+pr
+Model loaded from proteingym_models\v3d-[30]-0.0001-90.pth, model 8
+Spearman's p0: 0.23812302207229297; MSE0: 39532163858.837875
+0.02492924922516674
+Spearman's p1: 0.24879855933110312; MSE1: 39530746458.89518
+0.02642703044841437
+Spearman's p2: 0.25417255867082905; MSE2: 39518042407.318924
+0.04163582449252994
+Spearman's p3: 0.2865491236513543; MSE3: 39502425771.802444
+0.057113833432196386
+Spearman's p4: 0.2735932260542936; MSE4: 39483675599.42398
+0.07163163508916787
+Spearman's p5: 0.26899162519507747; MSE5: 39462668176.49854
+0.08659552877459835
+Spearman's p6: 0.28839738056517694; MSE6: 39437877073.13077
+0.09684378143407155
+Spearman's p7: 0.3384639476261048; MSE7: 39412488674.116005
+0.10996896446961155
+Spearman's p8: 0.3861129643655679; MSE8: 39387517801.64228
+0.12773591032041187

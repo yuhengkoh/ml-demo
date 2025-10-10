@@ -1,20 +1,8 @@
-Using device: cuda
-Using device: cuda
-Using device: cuda
-Using device: cuda
-Using device: cuda
-Using device: cuda
-Using device: cuda
-Using device: cuda
-Epoch 1, Loss: 3582.1687
-Using device: cuda
-Using device: cuda
-Using device: cuda
-Using device: cuda
-Using device: cuda
-Using device: cuda
-Epoch 1, Loss: 3581.6387
-Using device: cuda
-Using device: cuda
-Using device: cuda
-Epoch 1, Loss: 3583.2819
+Training model with hidden dimension: [30], learning rate: 0.0001:output path: v3-[30]-0.0001-10.pth
+Training model with hidden dimension: [30], learning rate: 0.0001:Training model with hidden dimension: [30], learning rate: 0.0001:Training model with hidden dimension: [30], learning rate: 0.0001:Training model with hidden dimension: [30], learning rate: 0.0001:output path: 11_1\variant_brenan/v3d-[30]-0.0001-20.pth
+Training model with hidden dimension: [30], learning rate: 0.0001:Training model with hidden dimension: [30], learning rate: 0.0001:Training model with hidden dimension: [30], learning rate: 0.0001:Training model with hidden dimension: [30], learning rate: 0.0001:output path: 11_1\variant_brenan/v3d-[30]-0.0001-299.pth
+Training model with hidden dimension: [60], learning rate: 0.0001:output path: 11_1\variant_brenan/v3d-[60]-0.0001-299.pth
+Training model with hidden dimension: [90], learning rate: 0.0001:output path: 11_1\variant_brenan/v3d-[90]-0.0001-299.pth
+Training model with hidden dimension: [30, 30], learning rate: 0.0001:output path: 11_1\variant_brenan/v3d-[30, 30]-0.0001-299.pth
+Training model with hidden dimension: [30, 30, 30], learning rate: 0.0001:output path: 11_1\variant_brenan/v3d-[30, 30, 30]-0.0001-299.pth
+Training model with hidden dimension: [30, 30, 30, 30], learning rate: 0.0001:output path: 11_1\variant_brenan/v3d-[30, 30, 30, 30]-0.0001-299.pth

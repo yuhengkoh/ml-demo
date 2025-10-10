@@ -4,18 +4,10 @@ model performance is evaluated based on ranking performance
 (via either kendall tau or spearman correlation)
 
 Contents:
-eval_lite: function that uses torch/scikit model to predict fitness of encodings in inputted dataframe. Returns new dataframe with respective predicted fitness.
-as well as relevant test statistics 
 eval: batch evaluates models in a folder
 '''
-def eval_lite(model, xdf):
-        if "sklearn" in str(type(model)): #checks if model is sklearn (but in our case only RF regressor used from sklearn)
-            y_pred = model.predict(xdf)
-            
-        elif "torch" in str(type(model)): #checks if model is torch
-            None
 
-def eval(save_folder_path="model_dsm11rmcov/*.pth",benchmark_path="cov2_S_labels_esm2_embeddings.csv"):
+def eval(save_folder="model_dsm11rmcov",benchmark_path="cov2_S_labels_esm2_embeddings.csv",y_label="z_norm"):
     import torch
     import pandas as pd
     from torch import nn
@@ -30,6 +22,7 @@ def eval(save_folder_path="model_dsm11rmcov/*.pth",benchmark_path="cov2_S_labels
     import copy
     import glob
     modellst = []
+    save_folder_path = save_folder+"/*.pth"
     for save in glob.glob(save_folder_path): #model stored in model_save folder
         #load function
         model = load_model(save)
@@ -38,7 +31,9 @@ def eval(save_folder_path="model_dsm11rmcov/*.pth",benchmark_path="cov2_S_labels
 
     # ----load test data into df----
     testdf = pd.read_csv(benchmark_path)  # CSV file containing test data
-    testxdf = testdf.drop(labels=["seq_origin","fitness_scaled","z_norm"], axis=1, errors='ignore')  # Drop the target column, igores errors if column not found
+    #testxdf = testdf.drop(labels=["seq_origin","fitness_scaled","z_norm"], axis=1, errors='ignore')  # Drop the target column, igores errors if column not found
+    testxdf = testdf.iloc[:, : 320]
+    #print("testxdf"+str(testxdf.values))
     tensorX = torch.tensor(testxdf.values).float() # Convert DataFrame to tensor
     summarydf = testdf.filter(["fitness_scaled","seq_origin","z_norm"])  # Copy the fitness scores and seq_origin to a new DataFrame for easy output
     #y_preT = torch.tensor(testdf["fitness_scaled"].values).float()  # Fitness scores (real values)
@@ -63,24 +58,25 @@ def eval(save_folder_path="model_dsm11rmcov/*.pth",benchmark_path="cov2_S_labels
 
     # ----df.corr and outputs statistic----
     from sklearn.metrics import mean_squared_error
-
+    outputlist = []
     for count3 in range(len(modellst)): 
         rankstat = summarydf["true_rank"].corr(summarydf["m"+str(count3)+"_rank"],method='spearman')
-        MSE = mean_squared_error(summarydf["fitness_scaled"], summarydf["pred_model"+str(count3)])
-
+        MSE = mean_squared_error(summarydf[y_label], summarydf["pred_model"+str(count3)])
+        outputlist.append([rankstat,MSE])
         #MSE = nn.MSELoss()(torch.tensor(summarydf["true_rank"].values).float(), torch.tensor(summarydf["m"+str(count3)+"_rank"].values).float()).item()
         print(f"Spearman's p{count3}: {rankstat}; MSE{count3}: {MSE}")
         print(summarydf["fitness_scaled"].corr(summarydf["pred_model"+str(count3)]))  # prints correlation between true fitness and predicted fitness
+    output_df = pd.DataFrame(outputlist)
+    output_df.to_csv('res_fullmodel.csv')
     '''
     # ----plotting ----
     import seaborn as sns
     import matplotlib.pyplot as plt
 
-    scatter = sns.scatterplot(data=summarydf, x="z_norm", y="pred_model46", hue="seq_origin")
+    scatter = sns.scatterplot(data=summarydf, x="true_rank", y="m14_rank", hue="seq_origin")
     scatter.set_title("Model Predictions vs True Rank")
     plt.show()
-    '''
-    '''
+
     # ----model evaluation ----
     model = FitnessPredictor()
     model.load_state_dict(torch.load('model_save/brenan0.pth'))
@@ -98,4 +94,12 @@ def eval(save_folder_path="model_dsm11rmcov/*.pth",benchmark_path="cov2_S_labels
         print("Predictions:", preds)
     '''
 
-eval(benchmark_path = 'znorm11_val_esm2_embeddings_rmcov.csv')
+#eval(benchmark_path = 'znorm11_val_esm2_embeddings_rmcov.csv')
+from contextlib import redirect_stdout
+'''
+with open('out.txt', 'w') as f:
+    with redirect_stdout(f):
+        print('data')
+        eval(save_folder='proteingym_models',benchmark_path='test_esm2_embeddings.csv')
+'''
+eval(save_folder='model_cas12',benchmark_path='cas12_target.csv')

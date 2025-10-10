@@ -1,5 +1,6 @@
 '''
 Note: Script contains functions that process datasets/csvs for later use 
+Customised ver for ProteinGym
 
 Contents: 
 train_test_split: generates training and validation dataset (split randomly) as a single csv
@@ -13,13 +14,13 @@ import pandas as pd
 import numpy as np
 
 #function generate training and testing dataset via random splitting
-def train_test_split(data_folder, train_pct=0.8,output_folder=""): #note that output folder needs forward/back slash
+def train_test_split(data_folder, train_pct=0.8):
     # import excel csv
     df_lst = []
     for path in glob.glob(data_folder+"/*.csv"):
         print(f"Loading data from {path}")
         tdf = pd.read_csv(path) #temp df
-        tdf["seq_origin"] = path.split("\\")[1].split("_")[0]  # Extract filename without extension
+        tdf["seq_origin"] = path.split("/")[1].split("_")[0]  # Extract filename without extension
         df_lst.append(tdf)
 
     # combine df
@@ -43,7 +44,8 @@ def train_test_split(data_folder, train_pct=0.8,output_folder=""): #note that ou
     #print(val)
     print(test)
 
-    train_out_file = output_folder + "train_esm2_embeddings.csv"
+
+    train_out_file = "train_esm2_embeddings.csv"
     train.to_csv(train_out_file, index=False)
     print(f"Saved train embeddings to: {train_out_file}")
 
@@ -53,7 +55,7 @@ def train_test_split(data_folder, train_pct=0.8,output_folder=""): #note that ou
     print(f"Saved val embeddings to: {val_out_file}")
     '''
 
-    test_out_file = output_folder + "test_esm2_embeddings.csv"
+    test_out_file = "test_esm2_embeddings.csv"
     test.to_csv(test_out_file, index=False)
     print(f"Saved test embeddings to: {test_out_file}")
 
@@ -69,5 +71,5 @@ def standard_norm(data_folder):
         tdf.to_csv(data_folder+"/"+output_str)
     print("done!")
 
-#train_test_split("training_data")
+train_test_split("training_data")
 #standard_norm("all_encodings_backup")

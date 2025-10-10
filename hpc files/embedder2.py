@@ -1,3 +1,8 @@
+'''
+Modified from Gretl's code to handle ProteinGym DMS
+
+
+'''
 print("im trying")
 import pandas as pd
 print("im trying pandas")
@@ -6,7 +11,7 @@ import esm
 import logging
 print("im trying logging")
 import sys
-
+import glob
 print("im starting")
 
 # ------------------- Setup Logging -------------------
@@ -58,7 +63,7 @@ def get_embedding(seq):
     except Exception as e:
         log_error(f"Error embedding sequence: {seq[:10]}... : {e}", code=103)
         return None
-
+'''
 # ------------------- Load Excel -------------------
 try:
     xls = pd.ExcelFile("DMS_failed.xlsx") 
@@ -67,25 +72,28 @@ try:
 except Exception as e:
     log_error(f"Error loading Excel file: {e}", code=104)
     sys.exit(1)
+'''
 
 # ------------------- Process Sheets -------------------
-for sheet_name, df in sheet_dfs.items():
+#for sheet_name, df in sheet_dfs.items():
+for sheet_name in glob.glob("DMS_ProteinGym_substitutions"): #model stored in model_save folder
     try:
         print(f"\nProcessing sheet: {sheet_name}")
-        if not {'variant', 'fitness_scaled'}.issubset(df.columns):
+        df = pd.read_csv(sheet_name)
+        if not {'mutated_sequence', 'DMS_score'}.issubset(df.columns):
             log_error(f"Skipping {sheet_name}: missing required columns", code=105)
             continue
-
+        '''
         original = df['Original_seq'].dropna().iloc[0]
         df = df[['variant', 'fitness_scaled']].dropna()
-
+        
         # Apply mutation
         df['sequences'] = df['variant'].apply(lambda v: apply_mutation(original, v))
-
+        '''
         # Embedding
         print(f"Embedding {len(df)} sequences...")
         embeddings = []
-        for seq in df['sequences']:
+        for seq in df['mutated_sequence']:
             emb = get_embedding(seq)
             if emb is not None:
                 embeddings.append(emb)
@@ -96,7 +104,10 @@ for sheet_name, df in sheet_dfs.items():
             log_error(f"{len(df) - len(embeddings)} sequences failed to embed", code=107)
 
         embed_df = pd.DataFrame(embeddings)
-        embed_df['fitness_scaled'] = df['fitness_scaled'].values[:len(embeddings)]
+        #embed_df['fitness_scaled'] = df['fitness_scaled'].values[:len(embeddings)]
+        embed_df['fitness_scaled'] = df['DMS_score'].values[:len(embeddings)]
+        embed_df['variant'] = df['mutant'].values[:len(embeddings)]
+        embed_df['DMS_scored'] = df['DMS_score'].values[:len(embeddings)]
 
         out_file = f"{sheet_name}_esm2_embeddings.csv"
         embed_df.to_csv(out_file, index=False)
