@@ -32,7 +32,8 @@ def eval(save_folder="model_dsm11rmcov",benchmark_path="cov2_S_labels_esm2_embed
     # ----load test data into df----
     testdf = pd.read_csv(benchmark_path)  # CSV file containing test data
     #testxdf = testdf.drop(labels=["seq_origin","fitness_scaled","z_norm"], axis=1, errors='ignore')  # Drop the target column, igores errors if column not found
-    testxdf = testdf.iloc[:, : 320]
+    cols = [str(i) for i in range(320)] #ESM2 output is a 320d matrix represented by column with name '0'-'319' 
+    testxdf = testdf[cols]  # selects for ESM2 columns 
     #print("testxdf"+str(testxdf.values))
     tensorX = torch.tensor(testxdf.values).float() # Convert DataFrame to tensor
     summarydf = testdf.filter(["fitness_scaled","seq_origin","z_norm"])  # Copy the fitness scores and seq_origin to a new DataFrame for easy output
@@ -40,7 +41,7 @@ def eval(save_folder="model_dsm11rmcov",benchmark_path="cov2_S_labels_esm2_embed
     #tensorY = torch.reshape(y_preT, (-1, 1))
 
     # ----calculate true rank ----
-    summarydf["true_rank"] = testdf["fitness_scaled"].rank(method='average')  # creates new column with true rank of fitness scores
+    summarydf["true_rank"] = testdf["z_norm"].rank(method='average')  # creates new column with true rank of fitness scores
 
     # ----model inference using raw data----
     with torch.no_grad():
@@ -65,7 +66,7 @@ def eval(save_folder="model_dsm11rmcov",benchmark_path="cov2_S_labels_esm2_embed
         outputlist.append([rankstat,MSE])
         #MSE = nn.MSELoss()(torch.tensor(summarydf["true_rank"].values).float(), torch.tensor(summarydf["m"+str(count3)+"_rank"].values).float()).item()
         print(f"Spearman's p{count3}: {rankstat}; MSE{count3}: {MSE}")
-        print(summarydf["fitness_scaled"].corr(summarydf["pred_model"+str(count3)]))  # prints correlation between true fitness and predicted fitness
+        print(summarydf["z_norm"].corr(summarydf["pred_model"+str(count3)]))  # prints correlation between true fitness and predicted fitness
     output_df = pd.DataFrame(outputlist)
     output_df.to_csv('res_fullmodel.csv')
     '''
@@ -102,4 +103,4 @@ with open('out.txt', 'w') as f:
         print('data')
         eval(save_folder='proteingym_models',benchmark_path='test_esm2_embeddings.csv')
 '''
-eval(save_folder='model_cas12',benchmark_path='cas12_target.csv')
+eval(save_folder='model_dsm11rmcov',benchmark_path='test_esm2_embeddings.csv')

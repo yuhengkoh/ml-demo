@@ -16,75 +16,6 @@ import glob
 import torch
 
 '''
-# ++++ train function ++++
-def train_model(df, y_label="z_norm",learn_rate=1e-4, epoch0=10, loss_fn=None, batch_size0=16, hidden_dim0=200,model_type="v3",to_save=True,log=False,pre_trained_model=None):
-    #dataframe manipulation
-    xdf = df[[*df][:320]]  # Drop the target column
-    X = torch.tensor(xdf.values).float() # ESM2 embeddings
-    y_preT = torch.tensor(df[y_label].values).float()  # Fitness scores (real values)
-    y = torch.reshape(y_preT, (-1, 1))  # Reshape to a 2D tensor with one column
-
-    # Set device
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    # note: for use of a log writer on the HPC
-    if log:
-        with open('log.txt', 'a') as log_file:
-            log_file.write(f"Using device: {device}\n")
-
-    # Create dataset and dataloader
-    dataset = TensorDataset(X, y)
-    #dataset = dataset.to(device)
-    dataloader = DataLoader(dataset, batch_size=batch_size0, shuffle=True)
-    #dataloader = dataloader.to(device)
-
-    # Initialize model, loss function, and optimizer
-    if model_type == "v3":
-        model = model_multilayer(hidden_dim=hidden_dim0)  # Use the upgraded model
-    elif model_type == "v3d":
-        model = model_v3d(hidden_dim=hidden_dim0)
-    else:
-        raise Exception("Function cannot handle selected model type")
-    if pre_trained_model is not None: #in case function is used for transfer/ active learning retraining
-        model = pre_trained_model
-    optimizer = torch.optim.Adam(model.parameters(), lr=learn_rate)
-    model = model.to(device)  # Move model to the specified device (CPU or GPU)
-    if loss_fn is None:
-        loss_fn = nn.MSELoss()  # Default to MSELoss if not provided
-    
-    # Training loop
-    for epoch in range(epoch0):
-        total_loss = 0
-        for batch_X, batch_y in dataloader:
-            batch_X, batch_y = batch_X.to(device), batch_y.to(device)
-            pred = model(batch_X)
-            loss = loss_fn(pred, batch_y)
-
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-            total_loss += loss.item()
-
-        print(f"Epoch {epoch+1}, Loss: {total_loss:.4f}")
-        if log:
-            with open('log.txt', 'a') as log_file:
-                log_file.write(f"Epoch {epoch+1}, Loss: {total_loss:.4f}\n")
-
-    # Save the trained model
-    if to_save:
-        output_path = f'v3-{hidden_dim0}-{learn_rate}-{epoch0}.pth'
-        torch.save(model.state_dict(), output_path)
-
-        # note: for use of a log writer on the HPC
-        with open('log.txt', 'a') as log_file:
-            log_file.write(f"output path: {output_path}\n")
-        return None #probably not needed but doesn't hurt to include it
-    else:
-        #model.to('cpu')  # Move model back to CPU before returning
-        return model
-'''  
-
-'''
 Main exercution
 '''
 # load training data
@@ -98,10 +29,6 @@ for path in glob.glob("training_data/*.csv"):
 #df = pd.read_csv('cov2_S_labels_esm2_embeddings.csv')
 df = pd.concat(df_lst, ignore_index=True)
 
-#import testing_df for per round evaluation; trains to sweet spot in epoch
-#comment out if not used
-#test_df = pd.read_csv("test_esm2_embeddings.csv")
-
 # hidden dims to test
 #hidden_dim_list = [[30],[90,30],[60,30],[90,60,30],[30,30,30],[90,60,30,30]]
 hidden_dim_list = [[30]]
@@ -110,26 +37,19 @@ lrlist = [1e-4]
 for i in hidden_dim_list:
     for k in lrlist:
         #for logging purposes
-        #lines 117,118,128,129,130,131 commented away to disable per-round validation due to errors, do manually
         with open('log.txt', 'a') as log_file:
             log_file.write(f"Training model with hidden dimension: {i}, learning rate: {k}:")
         print(f"Training model with hidden dimension: {i}, learning rate: {k}")
-        model = train_model(df,y_label="fitness_scaled", learn_rate=k, epoch0=10, hidden_dim0=i)
-        #test_df["y_pred_10"] = eval_model(model,test_df,output="np")
-        #score_list = [test_df["y_pred_10"].corr(test_df["fitness_scaled"],method='spearman')]
+        model,optimizer = train_model(df,y_label="fitness_scaled", learn_rate=k, epoch0=10, hidden_dim0=i,opt_out=True)
         for j in range(20,301,10):
             print(f"Training model with hidden dimension: {i}, epochs: {j}, learning rate: {k}")
             #retrains model for 10 loops per loop in for loop
-            model = train_model(df,y_label="fitness_scaled", learn_rate=k, epoch0=10, hidden_dim0=i,to_save=False, pre_trained_model=model)
+            model,optimizer = train_model(df,y_label="fitness_scaled", learn_rate=k, epoch0=10, hidden_dim0=i,to_save=False, pre_trained_model=model,pre_optimizer=optimizer,opt_out=True)
             output_path = f'v3d-{i}-{k}-{j}.pth'
             torch.save(model.state_dict(), output_path)
             # note: for use of a log writer on the HPC
             with open('log.txt', 'a') as log_file:
                 log_file.write(f"output path: {output_path}\n")
-            #test_df["y_pred_"+str(j)] = eval_model(model,test_df,output="np") #makes predictions, numpy output
-            #score_list.append(test_df["y_pred_"+str(j)].corr(test_df["fitness_scaled"],method='spearman')) #scoring per epoch
-        #with open('log.txt', 'a') as log_file: #to record spearman's per epoch
-            #log_file.write(f"Spearman's per 10 rounds: {score_list}\n")
     '''
     print(f"Training model with hidden dimension: {i}")
     model = train_model(X, y, learn_rate=1e-4, epoch0=180, hidden_dim0=i, batch_size0=10)

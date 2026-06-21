@@ -6,3 +6,14 @@ Training model with hidden dimension: [90], learning rate: 0.0001:output path: 1
 Training model with hidden dimension: [30, 30], learning rate: 0.0001:output path: 11_1\variant_brenan/v3d-[30, 30]-0.0001-299.pth
 Training model with hidden dimension: [30, 30, 30], learning rate: 0.0001:output path: 11_1\variant_brenan/v3d-[30, 30, 30]-0.0001-299.pth
 Training model with hidden dimension: [30, 30, 30, 30], learning rate: 0.0001:output path: 11_1\variant_brenan/v3d-[30, 30, 30, 30]-0.0001-299.pth
+Training model with hidden dimension: [30], learning rate: 0.0001:output path: k_cross_opt\k_1/v3d-[30]-0.0001-20.pth
+output path: k_cross_opt\k_1/v3d-[30]-0.0001-50.pth
+output path: k_cross_opt\k_1/v3d-[30]-0.0001-80.pth
+output path: k_cross_opt\k_1/v3d-[30]-0.0001-110.pth
+output path: k_cross_opt\k_1/v3d-[30]-0.0001-140.pth
+output path: k_cross_opt\k_1/v3d-[30]-0.0001-170.pth
+output path: k_cross_opt\k_1/v3d-[30]-0.0001-200.pth
+output path: k_cross_opt\k_1/v3d-[30]-0.0001-230.pth
+output path: k_cross_opt\k_1/v3d-[30]-0.0001-260.pth
+output path: k_cross_opt\k_1/v3d-[30]-0.0001-290.pth
+Training model with hidden dimension: [30], learning rate: 0.0001:

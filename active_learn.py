@@ -114,16 +114,17 @@ def rf_loop(target_pth,model_pth=None): #pre_train assumes pickle save for rf re
         with open(model_pth, "rb") as f:
             model_rf = pickle.load(f)
             sklearn.set_config(transform_output="pandas")
-    df_target = excel_import(target_pth)
+    df_target = pd.read_csv(target_pth)
     #print(model_rf.feature_names_in_)
-    spearman_lst, mse_lst = loop(model_rf,df_target)
+    spearman_lst, mse_lst, top_score = loop(model_rf,df_target, top_k_mean_score=True)
     print(spearman_lst)
     print(mse_lst)
-    return(spearman_lst,mse_lst)
+    return spearman_lst, top_score
 
 
 def torch_loop(target_pth, model_pth='model_dsm11rmcov/v3d-[30, 30, 30]-0.0001-130.pth',label_tl="l4"): #torch loop requires a pre-trained v3 or v3d model, as it uses transfer learning
     model = load_model(model_pth)
+    print(model)
     '''
     #configure model for training
     for param in model.parameters():
@@ -133,10 +134,12 @@ def torch_loop(target_pth, model_pth='model_dsm11rmcov/v3d-[30, 30, 30]-0.0001-1
     for param in model.model.l1.parameters():
         param.requires_grad = True
     '''
-    df_target = excel_import(target_pth)
-    spearman_lst, mse_lst = loop(model,df_target,top_layer_label=label_tl)
+    df_target = pd.read_csv(target_pth)
+    spearman_lst, mse_lst, top_score = loop(model,df_target,top_layer_label=label_tl,top_k_mean_score=True)
     print(spearman_lst)
     print(mse_lst)
+
+    return spearman_lst, top_score
     
 '''
 pre-training functions (for random forest)
@@ -176,7 +179,7 @@ core of active learning: loop + variant selection
 '''
 #function that predicts, then retrains model per cycle
 # Note: due to lack of experimental data, complete DMS data not included in training data is used to simulate actual DE/PACE experiments
-def loop(model,df_target,cycles=4,top_layer_label=None): 
+def loop(model,df_target,cycles=4,top_layer_label=None,top_k_mean_score=False): 
     #model: model of interest; cycles: number of learning loops
     #(for handling Scikit models) xdf: Encoding Dataframe; ydf: true fitness
     #(for handling torch models) df: Dataframe with both encodings and fitness; top_layer_label: used to specify layer to be frozen 
@@ -184,15 +187,20 @@ def loop(model,df_target,cycles=4,top_layer_label=None):
     spearman_per_cycle = []
     mse_per_cycle = []
     train_df = pd.DataFrame()
+    df_target_clone = df_target.copy()
+    xdf0 = df_target.loc[:, [str(i) for i in range(0, 320)]]
+    y_true0 = df_target["z_norm"] 
+    top_mean_score_lst = []
     #identifies if model is sklearn or torch
     #since they differ in the way which they are handled
     if "sklearn" in str(type(model)): #checks if model is sklearn (but in our case only RF regressor used from sklearn)
         #initialization of parameters needed
         model_rf = model
-        xdf = df_target.loc[:, [str(i) for i in range(0, 320)]]
-        y_true = df_target["z_norm"]
-        x_train = pd.DataFrame() 
+        x_train = pd.DataFrame()
         for i in range(cycles): #main cycle
+            #y, x df
+            xdf = df_target.loc[:, [str(i) for i in range(0, 320)]]
+            y_true = df_target["z_norm"]
             #prediction
             y_pred = model_rf.predict(xdf)
             #test statistics
@@ -201,7 +209,15 @@ def loop(model,df_target,cycles=4,top_layer_label=None):
             print(spearman_per_cycle)
             #active learning
             #variant selection
-            train_df = select_variant(df_target,y_pred,train_df)
+            df_target,train_df = select_variant(df_target,y_pred,train_df)
+
+            #to calculate average score of top n variants
+            y_pred0 = model_rf.predict(xdf0)
+            null_df = pd.DataFrame()
+            placeholder, top_k_var = select_variant(df_target_clone,y_pred0,null_df)
+            top_mean_score = top_k_var["z_norm"].mean()
+            top_mean_score_lst.append(top_mean_score)
+
             #assign new training dataset
             x_train = train_df.loc[:, [str(i) for i in range(0, 320)]]
             y_train_true = train_df["z_norm"]
@@ -229,46 +245,62 @@ def loop(model,df_target,cycles=4,top_layer_label=None):
             model_rf.fit(x_train,y_train_true)
     elif "fp_model" in str(type(model)): #checks if model is torch; assumes all torch model inputs are of v3/v3d+ type
         model.eval()
-        # ---- Generate necessary tensors/df for inference/learning ----
-        xdf = df_target.loc[:, [str(i) for i in range(0, 320)]]
-        X = torch.tensor(xdf.values).float() # ESM2 embeddings
-        y_true = df_target["z_norm"]
         x_train = pd.DataFrame() 
+        top_mean_score_lst = []
         #----loop----
         for j in range(cycles):
+            # ---- Generate necessary tensors/df for inference/learning ----
+            xdf = df_target.loc[:, [str(i) for i in range(0, 320)]]
+            y_true = df_target["z_norm"]
             #model evaluation
             y_pred = eval_model(model,xdf,output="np")
             #test statistics
             mse_per_cycle.append(mean_squared_error(y_true, y_pred))
             spearman_per_cycle.append(float(spearmanr(y_true,y_pred).statistic))
             #variant selection
-            train_df = select_variant(df_target,y_pred,train_df)
-            #print(train_df)
+            df_target,train_df = select_variant(df_target,y_pred,train_df)
+            print(df_target)
+
+            #top mean score calculation
+            y_pred0 = eval_model(model,xdf0,output="np")
+            null_df = pd.DataFrame()
+            placeholder, top_k_var = select_variant(df_target_clone,y_pred0,null_df)
+            top_mean_score = top_k_var["z_norm"].mean()
+            top_mean_score_lst.append(top_mean_score)
+
             #retraining
-            model = train_model(train_df,pre_trained_model=model,to_save=False,learn_rate=1e-3,batch_size0=4,epoch0=30)
+            model = train_model(train_df,pre_trained_model=model,to_save=False,learn_rate=1e-4,batch_size0=4,epoch0=30)
 
-    return spearman_per_cycle, mse_per_cycle
+    if top_k_mean_score:
+        return spearman_per_cycle, mse_per_cycle, top_mean_score_lst
+    else:
+        return spearman_per_cycle, mse_per_cycle
 
+
+#selects variants from training and remove them from original
 def select_variant(df_target,y_pred,old_df,count=16, fitness_label='z_norm', mode='topn'):
-    df_target['y_pred'] = y_pred 
+    df_target['y_pred'] = y_pred #adds y_pred to target df temporarily
     if mode=='topn':
-        #print(df_target[fitness_label].dtype)
-        new_variant = df_target.nlargest(count,'y_pred')
-        df_out = pd.concat([old_df,new_variant],ignore_index=True)
-        duplicates = df_out.drop("y_pred", axis=1).duplicated()
-        print(duplicates.sum())
-        #print(df_out)
-        #df_out.drop_duplicates().reset_index(drop=True)
-        
-        #new_df = df_target.sample(n=count)  
-    return df_out
+        var_addded = 0
+        while var_addded < count:
+            idx = df_target['y_pred'].idxmax()
+            top_row = df_target.loc[[idx]]
+            df_next_train = pd.concat([old_df, top_row], ignore_index=True)
+            df_target = df_target.drop(idx).reset_index(drop=True)
+            var_addded += 1
+        #finally, remove y_pred
+        df_target = df_target.drop('y_pred', axis=1)
+        df_next_train = df_next_train.drop('y_pred', axis=1)
+        print(df_next_train['z_norm'].mean())
+    return df_target, df_next_train
 
 
 
 #############################################
 #           Main Exercution                 #
 #############################################
-#rf_loop('cov2_S_labels_esm2_embeddings.csv',model_pth="rf_regressor_dsm11_rm_cov.cpickle")
-#torch_loop('giacomelli_normalised_esm2_encodings.csv',model_pth='proteingym_models/v3d-[30]-0.0001-90.pth',label_tl='l2')
+#rf_loop('znorm_dsm12/cov2_normalised_esm2_encodings.csv',model_pth="rf_regressor_dsm11_rm_cov.cpickle")
+#torch_loop('PABP_YEAST_Melamed_2013.csv_esm2_embeddings.csv',model_pth='v3d-[30]-0.0001-70.pth',label_tl='l2')
+#torch_loop('PABP_YEAST_Melamed_2013.csv_esm2_embeddings.csv',model_pth='proteingym_models/v3d-[30]-0.0001-70.pth',label_tl='l2')
 #pre_train_rf()
 #print("done!")

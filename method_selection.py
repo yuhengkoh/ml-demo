@@ -21,14 +21,15 @@ Use scikit learn to generate models.
 Stage 4: Output
 Data will be outputted as csv file
 '''
-
-# Stage 1
+#############
+# Stage 1 
+#############
 import os
 import shutil
 
 source_folder = "znorm_dsm12"
-destination_root = "11_1"
-'''
+destination_root = "11_12"
+
 # List all files in the source folder
 files = [f for f in os.listdir(source_folder) if os.path.isfile(os.path.join(source_folder, f))]
 
@@ -43,8 +44,10 @@ for i, file_to_skip in enumerate(files, start=1):
                         os.path.join(new_folder, f))
 
 print("Done! Created", len(files), "folders.")
-'''
+
+###########
 #Stage 1.5
+###########
 from data_process import train_test_split
 from pathlib import Path
 import glob
@@ -55,17 +58,20 @@ import glob
 # get all *immediate* subfolders (full paths)
 #folders = [str(p.resolve()) for p in parent_folder.iterdir() if p.is_dir()]
 folders = glob.glob(destination_root+"/*")
-'''
+
 #create train and test sets in each folder
 for folder in folders:
     dest_folder = folder + "/"
     train_test_split(folder,train_pct=0.8,output_folder=dest_folder)
 
+############
 #Stage 2 MLP
+############
 from fp_model import train_model, model_spearman
 import torch
 import pandas as pd
 
+#loop for each 11_1 out
 for folder2 in folders:
     #import training and testing dataset
     train_file_dest = folder2 + "/train_esm2_embeddings.csv"
@@ -82,6 +88,8 @@ for folder2 in folders:
     outputlist = []
 
     #training models
+    #models evaluate after each 10 epochs, and training continues
+    #model and optimizer is inherited
     for i in hidden_dim_list:
         per_epoch_spearman = []
         for k in lrlist:
@@ -89,28 +97,40 @@ for folder2 in folders:
             with open('log.txt', 'a') as log_file:
                 log_file.write(f"Training model with hidden dimension: {i}, learning rate: {k}:")
             print(f"Training model with hidden dimension: {i}, learning rate: {k}")
-            model = train_model(df,y_label="z_norm", learn_rate=k, epoch0=10, hidden_dim0=i, to_save=False)
+
+            #trains and snapshots model (inital)
+            model,optimizer = train_model(df,y_label="z_norm", learn_rate=k, epoch0=10, hidden_dim0=i, to_save=False,opt_out=True)
             output_path = folder2 + f'/v3d-{i}-{k}-10.pth'
             torch.save(model.state_dict(), output_path)
-            #print(model)
+
+            #logs model performance
             per_epoch_spearman.append(model_spearman(model,testdf))
-            for j in range(20,301,10):
+
+            #training loop after initial model
+            for j in range(30,301,30):
                 print(f"Training model with hidden dimension: {i}, epochs: {j}, learning rate: {k}")
+
                 #retrains model for 10 loops per loop in for loop
-                model = train_model(df,y_label="z_norm", learn_rate=k, epoch0=10, hidden_dim0=i,to_save=False, pre_trained_model=model)
+                model,optimizer = train_model(df,y_label="z_norm", learn_rate=k, epoch0=10, hidden_dim0=i,to_save=False, pre_trained_model=model,pre_optimizer=optimizer,opt_out=True)
+                
+                #evaluate model performance
                 per_epoch_spearman.append(model_spearman(model,testdf))
+
+                #snapshot model
                 output_path = folder2 + f'/v3d-{i}-{k}-{j}.pth'
                 torch.save(model.state_dict(), output_path)
                 # note: for use of a log writer on the HPC
                 with open('log.txt', 'a') as log_file:
                     log_file.write(f"output path: {output_path}\n")
+
+        #writes overall model performance to output list
         outputlist.append(per_epoch_spearman)
     
     #convert list to csv output
     out_df = pd.DataFrame(outputlist)
     out_df.to_csv(csv_out,index=False, header=False)
-'''
 
+'''
 #Stage 3: Linear and Random Forest Models
 from active_learn import excel_import
 from sklearn.linear_model import LinearRegression as lm
@@ -145,7 +165,7 @@ for folder3 in folders:
     model_lin = lm()
 
     #training data
-    xdf_train,ydf_train = excel_import(pth=train_file_dest,output="df_fitness")
+    xdf_train,ydf_train = excel_import(pth=train_file_dest,output="df_znorm")
     #xdf = df[[*df][:320]] 
     #ydf = 
     model_rf.fit(xdf_train,ydf_train)
@@ -161,7 +181,7 @@ for folder3 in folders:
     outputlist_sk.append([folder3,spearman_rf,spearman_lm])
 out_df_sk = pd.DataFrame(outputlist_sk)
 out_df_sk.to_csv(destination_root+"/sklearn_spearman.csv",index=False, header=False)
-
+'''
 
 
 

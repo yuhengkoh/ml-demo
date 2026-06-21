@@ -20,7 +20,7 @@ def train_test_split(data_folder, train_pct=0.8):
     for path in glob.glob(data_folder+"/*.csv"):
         print(f"Loading data from {path}")
         tdf = pd.read_csv(path) #temp df
-        tdf["seq_origin"] = path.split("/")[1].split("_")[0]  # Extract filename without extension
+        tdf["seq_origin"] = path.split("\\")[1].split("_")[0]  # Extract filename without extension
         df_lst.append(tdf)
 
     # combine df
@@ -71,5 +71,5 @@ def standard_norm(data_folder):
         tdf.to_csv(data_folder+"/"+output_str)
     print("done!")
 
-train_test_split("training_data")
+train_test_split("znorm_dsm12",1)
 #standard_norm("all_encodings_backup")

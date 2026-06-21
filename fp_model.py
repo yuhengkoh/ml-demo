@@ -19,19 +19,19 @@ from collections import OrderedDict
 def load_model(save):
     #import necessary packages
     import re
-    print(save.split("/")[-1][:2])
+    model_type = save.split("/")[-1][:3]
     #if-else switch to handle different model classes
     #code is hardcoded to recognise first few digits of model name, may need to be tweaked for non-Windows platforms
-    if re.search("v2",save): #v2 = fp2_model
+    if re.search("v2",model_type): #v2 = fp2_model
         hidden_dim0 = int(save.split("-")[1])
         model = fp2_model(hidden_dim=hidden_dim0)
-    elif re.search("v3-",save): #v3 = model_multilayer
+    elif re.search("v3-",model_type): #v3 = model_multilayer
         hidden_dim_str = re.search(r"\[([0-9, ]+)\]",save).group(1)
         hidden_dim0 = hidden_dim_str.split(', ')
         hidden_dim0 = [int(v) if v.lstrip('-').isnumeric() else v for v in hidden_dim0]
         #print(hidden_dim0)
         model = model_multilayer(hidden_dim=hidden_dim0)
-    elif re.search("v3d",save): #v3d = model_multilayer amended with dropout
+    elif re.search("v3d",model_type): #v3d = model_multilayer amended with dropout
         hidden_dim_str = re.search(r"\[([0-9, ]+)\]",save).group(1)
         hidden_dim_strlst = hidden_dim_str.split(', ')
         hidden_dim0 = [int(v) if v.lstrip('-').isnumeric() else v for v in hidden_dim_strlst]
@@ -43,7 +43,7 @@ def load_model(save):
     return model
 
 #function that trains model
-def train_model(df, y_label="z_norm",learn_rate=1e-4, epoch0=10, loss_fn=None, batch_size0=16, hidden_dim0=200,model_type="v3d",to_save=True,log=False,pre_trained_model=None):
+def train_model(df, y_label="z_norm",learn_rate=1e-4, epoch0=10, loss_fn=None, batch_size0=16, hidden_dim0=200,model_type="v3d",to_save=True,log=False,pre_trained_model=None,pre_optimizer=None,opt_out=False):
     #dataframe manipulation
     cols = [str(i) for i in range(320)] #ESM2 output is a 320d matrix represented by column with name '0'-'319' 
     xdf = df[cols]  # selects for ESM2 columns 
@@ -74,7 +74,12 @@ def train_model(df, y_label="z_norm",learn_rate=1e-4, epoch0=10, loss_fn=None, b
     if pre_trained_model is not None: #in case function is used for transfer/ active learning retraining
         model = pre_trained_model
         model.train()
-    optimizer = torch.optim.Adam(model.parameters(), lr=learn_rate)
+        if pre_optimizer is not None:
+            optimizer = pre_optimizer
+        else: 
+            optimizer = torch.optim.Adam(model.parameters(), lr=learn_rate)
+    else:
+        optimizer = torch.optim.Adam(model.parameters(), lr=learn_rate)
     model = model.to(device)  # Move model to the specified device (CPU or GPU)
     if loss_fn is None:
         loss_fn = nn.MSELoss()  # Default to MSELoss if not provided
@@ -106,16 +111,20 @@ def train_model(df, y_label="z_norm",learn_rate=1e-4, epoch0=10, loss_fn=None, b
         # note: for use of a log writer on the HPC
         with open('log.txt', 'a') as log_file:
             log_file.write(f"output path: {output_path}\n")
-        return model #probably not needed but doesn't hurt to include it
+        return model
     
     # Move model back to CPU before returning
     if device == 'cuda':
         model.to('cpu')  
     model.eval()
-    return model
+    if opt_out:
+        return model, optimizer
+    else:
+        return model
 
 def eval_model(model,testdf,y_true_label="z_norm",output="tensor"):
-    testxdf = testdf.drop(labels=["seq_origin","fitness_scaled","z_norm"], axis=1, errors='ignore')  # Drop the target column, igores errors if column not found
+    cols = [str(i) for i in range(320)] #ESM2 output is a 320d matrix represented by column with name '0'-'319' 
+    testxdf = testdf[cols]  # selects for ESM2 columns 
     tensorX = torch.tensor(testxdf.values).float() # Convert DataFrame to tensor
     model.eval()
     with torch.no_grad():
@@ -128,14 +137,15 @@ def eval_model(model,testdf,y_true_label="z_norm",output="tensor"):
 
 def model_spearman(model,testdf):
     #generate test input seq
-    testxdf = testdf.iloc[:, : 320]
+    cols = [str(i) for i in range(320)] #ESM2 output is a 320d matrix represented by column with name '0'-'319' 
+    testxdf = testdf[cols]  # selects for ESM2 columns 
     tensorX = torch.tensor(testxdf.values).float() # Convert DataFrame to tensor
     summarydf = testdf.filter(["fitness_scaled","seq_origin","z_norm"])  # Copy the fitness scores and seq_origin to a new DataFrame for easy output
     #y_preT = torch.tensor(testdf["fitness_scaled"].values).float()  # Fitness scores (real values)
     #tensorY = torch.reshape(y_preT, (-1, 1))
 
     # ----calculate true rank ----
-    summarydf["true_rank"] = testdf["fitness_scaled"].rank(method='average')  # creates new column with true rank of fitness scores
+    summarydf["true_rank"] = testdf["z_norm"].rank(method='average')  # creates new column with true rank of fitness scores
 
     # ----model inference using raw data----
     with torch.no_grad():
@@ -151,8 +161,8 @@ def model_spearman(model,testdf):
     # ----df.corr and outputs statistic----
     from sklearn.metrics import mean_squared_error
     rankstat = summarydf["true_rank"].corr(summarydf["m_rank"],method='spearman')
-    MSE = mean_squared_error(summarydf["fitness_scaled"], summarydf["pred_model"])
-
+    MSE = mean_squared_error(summarydf["z_norm"], summarydf["pred_model"])
+    
     #MSE = nn.MSELoss()(torch.tensor(summarydf["true_rank"].values).float(), torch.tensor(summarydf["m"+str(count3)+"_rank"].values).float()).item()
     #print(f"Spearman's p{count3}: {rankstat}; MSE{count3}: {MSE}")
     #print(summarydf["fitness_scaled"].corr(summarydf["pred_model"+str(count3)]))  # prints correlation between true fitness and predicted fitness
